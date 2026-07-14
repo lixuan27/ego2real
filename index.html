@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ego2Real / RoboEgoForge — one contact-consistent trace, two branches, every clip verified</title>
+<meta name="description" content="A data engine that turns monocular egocentric human video into robot training data: robotized observation video, executable trajectory, and a policy-ready dataset, all driven by one contact-consistent 4D trace and verified by execution in a digital twin.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ THE SPINE: one line, forked into two branches, rejoined at QC ============ -->
+<div id="spine" aria-hidden="true">
+  <svg viewBox="0 0 34 1000" preserveAspectRatio="none">
+    <path class="track" d="M17,0 L17,300 C17,340 5,340 5,380 L5,620 M17,300 C17,340 29,340 29,380 L29,620 M5,620 C5,660 17,660 17,700 L17,1000 M29,620 C29,660 17,660 17,700"/>
+    <path class="prog" id="spineProg" d="M17,0 L17,300"/>
+    <circle class="dot" id="spineDot" cx="17" cy="0" r="3.2"/>
+  </svg>
+  <span class="sl" style="top:12%;left:14px">trace</span>
+  <span class="sl v" style="top:42%;left:-4px">visual</span>
+  <span class="sl a" style="top:42%;left:32px">action</span>
+  <span class="sl" style="top:78%;left:14px">verify</span>
+</div>
+
+<nav class="top">
+  <div class="wrap">
+    <div class="brand">Ego2Real <span>/</span> RoboEgoForge</div>
+    <div class="links">
+      <a href="#task">Task</a>
+      <a href="#challenge">Challenge</a>
+      <a href="#insight">Insight</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#trace">Trace</a>
+      <a href="#action">Action</a>
+      <a href="#visual">Visual</a>
+      <a href="#qc">Quality</a>
+      <a href="#plan">Plan</a>
+      <a href="#risk">Risks</a>
+      <a href="#evidence">Evidence</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="top">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow">Human-ego-to-robot data engine</div>
+        <h1>One trace.<span class="l2">Two branches.</span><span class="l3">Every clip verified.</span></h1>
+        <p class="lede">Point it at a first-person video of a person using their hands. It returns a video of a <em>robot</em> doing the same task in the same scene, the executable joint trajectory behind that video, and a policy-ready dataset. A single contact-consistent 4D trace drives both outputs, and a digital twin checks every clip by running it.</p>
+      </div>
+      <figure style="margin:0">
+        <div class="vidcard">
+          <video src="assets/hero_brush.mp4" autoplay loop muted playsinline preload="metadata"></video>
+          <div class="vlab"><span>Input · human ego</span><span class="r">Output · robotized</span></div>
+        </div>
+        <figcaption class="cap">Brushing a box (TACO). The hand is removed, a Franka arm is composited into the real scene, and the arm you see is rendered at the forward kinematics of the trajectory that was actually executed.</figcaption>
+      </figure>
+    </div>
+
+    <div class="stats reveal">
+      <div><b>27</b><span>robotized packages, 6 900 frames</span></div>
+      <div><b>0.97</b><span>FK-to-pixel cycle consistency</span></div>
+      <div><b>25 → 50%</b><span>strict yield, after automatic repair</span></div>
+      <div><b>3</b><span>embodiments from one trace</span></div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 1. TASK ============ -->
+<section id="task">
+  <div class="wrap">
+    <div class="two wide-l">
+      <div>
+        <div class="eyebrow reveal">01 · The task</div>
+        <h2 class="reveal">Human video already contains the actions. Make them explicit, executable, and checkable.</h2>
+        <p class="lede reveal">Robot learning is starved of one thing: observation-action data. Humans generate that data all day, in first person, for free. The gap is that a video shows a hand, while a policy needs a robot, a trajectory, and a guarantee that the trajectory runs.</p>
+        <p class="reveal">We take a monocular egocentric clip, with zero paired human-to-robot supervision, and produce three coupled artifacts. The hard constraint is the one people usually skip: the contact semantics of the produced trajectory must match the contact semantics of the video. The person grasps the tool at frame 40; the robot grasps the tool at frame 40, at the same place on the tool.</p>
+      </div>
+      <div class="formal reveal">
+        <div class="row"><div class="k">Input</div><div class="v"><b>V</b> = frames I<sub>1..T</sub>, one camera, optional intrinsics K</div></div>
+        <div class="row"><div class="k">Output O</div><div class="v"><b>Robotized video</b>, same viewpoint, same scene, robot in place of the hand</div></div>
+        <div class="row"><div class="k">Output τ</div><div class="v"><b>Executable trajectory</b>, joint positions and gripper state</div></div>
+        <div class="row"><div class="k">Output D</div><div class="v"><b>Dataset entries</b>, observation-action pairs with language and quality metadata</div></div>
+        <div class="row"><div class="k">Objective</div><div class="v">maximize execution success of τ in a twin, plus visual closeness of O to real footage</div></div>
+        <div class="row"><div class="k">Constraint</div><div class="v" style="color:var(--contact);font-weight:600">contact(τ) = contact(V)</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 2. CHALLENGE ============ -->
+<section id="challenge">
+  <div class="wrap">
+    <div class="eyebrow reveal">02 · The challenge</div>
+    <h2 class="reveal">Every pipeline forks. The fork is where the data quietly breaks.</h2>
+    <p class="lede reveal">Perception gives you hands, masks, depth and camera motion. Then the pipeline splits in two: one branch paints a robot into the scene, the other branch retargets the hand onto a gripper. Once they split, three failures follow, and each one is invisible in the final mp4.</p>
+
+    <div class="two" style="margin-top:38px">
+      <div class="stack">
+        <div class="card reveal"><h3 style="color:var(--vis)">Drift A · the robot you see</h3><p>The rendered arm is posed by one solver; the trajectory is produced by another. The pretty video and the shipped actions describe two different robots, and a policy trained on the pair learns the difference between them.</p></div>
+        <div class="card reveal"><h3 style="color:var(--act)">Drift B · the moment of contact</h3><p>A kinematic copy of the wrist places the gripper near the object. Near is enough to look right and fails to grasp: the fingers close on air, the object stays put, while the reward function reports a smooth track.</p></div>
+        <div class="card reveal"><h3 style="color:var(--contact)">Drift C · the referee</h3><p>Quality control is usually a forward heuristic: a filter that inspects the perception outputs and drops suspicious clips. A filter can rank clips. Only execution can tell you whether the trajectory would have worked.</p></div>
+      </div>
+      <div class="reveal">
+        <p class="q">If the video and the trajectory disagree, which one is the training data?</p>
+        <p>The honest answer decides the architecture. We refuse to let the two branches hold separate beliefs. They read from one object, and that object is built around the one physical event that both of them must respect.</p>
+        <div class="chips" style="margin-top:22px">
+          <span class="chip">kinematics-anchored: copy the wrist</span>
+          <span class="chip">object-pose-anchored: copy the object</span>
+          <span class="chip c">contact-anchored: copy the touch</span>
+        </div>
+        <p class="cap">Three anchoring choices are available to any such engine. The choice is testable, and it is the scientific question this project asks.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 3. INSIGHT ============ -->
+<section id="insight">
+  <div class="wrap">
+    <div class="eyebrow reveal">03 · Insight</div>
+    <h2 class="reveal">Contact is the invariant. Everything else is a coordinate choice.</h2>
+    <div class="two wide-l" style="margin-top:30px">
+      <div class="stack">
+        <div class="card reveal">
+          <h3><span class="hl">Insight 1.</span> The touch survives the change of body.</h3>
+          <p>A human wrist pose is meaningless on a Franka flange; a fingertip pressing the handle of a brush is meaningful on any embodiment. Contact points, contact onset and grasp type are observable in the video and portable across robots, so contact is what an intermediate representation should carry. Inspired by the retargeting tradition, which copies kinematics, and by the grasp literature, which copies affordance: we keep the event, and let the kinematics follow.</p>
+        </div>
+        <div class="card reveal">
+          <h3><span class="hl">Insight 2.</span> A renderer can referee its own pipeline.</h3>
+          <p>Render the robot at the forward kinematics of the executed trajectory, then project the executed end effector back into the image and measure its distance to the rendered robot mask. Agreement is a number between 0 and 1, computed per frame, with no annotation. Cycle consistency turns the visual branch into a detector for action-branch bugs. It found a diverging control segment for us before any human noticed.</p>
+        </div>
+        <div class="card reveal">
+          <h3><span class="hl">Insight 3.</span> A failed clip tells you why it failed.</h3>
+          <p>Scoring yields a failure dimension, and a failure dimension maps to a repair action: relax the grasp orientation, re-place the base, spend more sampling budget, re-run the trace with looser contact thresholds. Rerun only the affected stage, rescore, and keep the attempt that improves the verdict. Quality control graduates from a filter into a repairer, and yield becomes something you engineer.</p>
+        </div>
+      </div>
+      <div class="reveal">
+        <p class="q">What if the quality gate were the training signal for the pipeline itself?</p>
+        <p>Three inspirations shaped the machinery. Model-predictive control in simulation, for turning a noisy reference into an executable one. Evolution strategies, for optimizing a reward that has contact switches and early termination inside it, where gradients disappear. Curation with conditioning, for keeping an imperfect clip and telling the policy how much to trust it, via a quality token in the observation.</p>
+        <div class="kpis">
+          <div class="kpi c"><div class="v">first-class</div><div class="l">contact events live inside the trace schema, beside pose</div></div>
+          <div class="kpi c"><div class="v">one source</div><div class="l">rendering configuration equals FK of the executed trajectory</div></div>
+          <div class="kpi c"><div class="v">closed loop</div><div class="l">failure reason drives a targeted rerun of one stage</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 4. NOVELTY ============ -->
+<section id="novelty">
+  <div class="wrap">
+    <div class="eyebrow reveal">04 · Novelty and positioning</div>
+    <h2 class="reveal">One contribution, stated in one line.</h2>
+    <p class="lede reveal">A contact-consistent 4D hand-object canonical trace serves as the single source of truth for visual robotization and action retargeting alike, and a closed-loop quality gate verifies each clip by executing it and repairs the ones that fail.</p>
+
+    <table class="reveal" style="margin-top:30px">
+      <thead><tr><th>Axis</th><th>Common practice</th><th>Ours</th></tr></thead>
+      <tbody>
+        <tr><td>Intermediate representation</td><td>Per-branch outputs, consumed independently</td><td class="ours">One canonical 4D trace with contact events as first-class fields</td></tr>
+        <tr><td>Anchoring of the grasp</td><td>Kinematic copy of the wrist, or the object pose alone</td><td class="ours">Contact points from the video, with a pre-grasp ramp</td></tr>
+        <tr><td>Pixel-action agreement</td><td>Assumed</td><td class="ours">Measured per frame: FK-to-pixel cycle consistency</td></tr>
+        <tr><td>Quality control</td><td>Forward heuristic filter, clips get dropped</td><td class="ours">Execution-verified scoring plus a repair feedback loop</td></tr>
+        <tr><td>Embodiment</td><td>One robot per engine</td><td class="ours">One trace, many robots: parallel jaw and dexterous hand</td></tr>
+        <tr><td>Photorealism</td><td>Generative refinement of the rendered frame</td><td class="ours">Deterministic rendering upgrades that keep geometry exact</td></tr>
+      </tbody>
+    </table>
+
+    <div class="two" style="margin-top:44px">
+      <div class="reveal">
+        <h3 style="margin-bottom:10px">Three measurement proposals</h3>
+        <p>The engine also changes how such data should be judged, and each proposal came from a failure we caught.</p>
+        <div class="stack" style="margin-top:14px">
+          <div class="card"><h3>FK-to-pixel cycle consistency</h3><p>Per-frame agreement between the trajectory and the rendered pixels. A dataset that reports it is a dataset whose video and actions are the same robot.</p></div>
+          <div class="card"><h3>Execution-verified yield</h3><p>Report the fraction of clips that survive a rollout in the twin, before and after repair. Yield becomes comparable across engines.</p></div>
+          <div class="card"><h3>Interaction-gated success rate</h3><p>Score endpoint success only on rollouts where the object actually moved. It closes the do-nothing degeneracy, where a frozen policy is credited with success on low-displacement episodes.</p></div>
+        </div>
+      </div>
+      <div class="reveal">
+        <h3 style="margin-bottom:10px">Where the novelty sits</h3>
+        <div class="stack" style="margin-top:14px">
+          <div class="card"><h3 style="color:var(--vis)">Architectural</h3><p>The iron rule: the robot in the video is rendered from the executed trajectory. Update the trajectory, re-render. This makes pixel-action consistency structural rather than aspirational.</p></div>
+          <div class="card"><h3 style="color:var(--act)">Methodological</h3><p>A three-rung refinement ladder ending in a state-conditioned residual policy, optimized by evolution strategies against a binary success reward whose tightness is a separate knob.</p></div>
+          <div class="card"><h3 style="color:var(--contact)">Strategic</h3><p>Repair beats rejection. A clip that fails carries its diagnosis, and the engine spends compute where the diagnosis points.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 5. PIPELINE ============ -->
+<section id="pipeline">
+  <div class="wrap">
+    <div class="eyebrow reveal">05 · The pipeline</div>
+    <h2 class="reveal">One figure, drawn all the way through.</h2>
+    <p class="lede reveal">Click any stage to open it. The two branches read from the same trace, and they meet again inside the quality gate.</p>
+
+    <div class="pipe reveal">
+      <div class="pipe-rail">
+        <button class="node" data-k="ingest"><span class="m">M0</span><span class="t">Ingest</span><span class="s">Screen clips, license gate, package layout</span></button>
+        <button class="node" data-k="perceive"><span class="m">M1</span><span class="t">Perceive</span><span class="s">Hands, masks, metric depth, camera</span></button>
+        <button class="node" data-k="trace"><span class="m">M1.5</span><span class="t">Build the trace</span><span class="s">4D hand-object canonical trace with contact</span></button>
+      </div>
+
+      <div class="fork">
+        <div class="branchcol v">
+          <div class="branchtag">Visual branch · what the policy sees</div>
+          <button class="node stack-v" data-k="inpaint"><span class="m">M3a</span><span class="t">Remove the human</span><span class="s">Mask union, inpaint, temporal background plate</span></button>
+          <div class="arrowdown">↓</div>
+          <button class="node stack-v" data-k="compose"><span class="m">M3b</span><span class="t">Composite the robot</span><span class="s">Two-pass differential occlusion, exact alpha</span></button>
+          <div class="arrowdown">↓</div>
+          <button class="node" data-k="hifi"><span class="m">M8</span><span class="t">High-fidelity render</span><span class="s">Supersample, soft shadows, color harmonization</span></button>
+        </div>
+        <div class="branchcol a">
+          <div class="branchtag">Action branch · what the policy does</div>
+          <button class="node stack-v" data-k="retarget"><span class="m">M2</span><span class="t">Retarget</span><span class="s">MINK inverse kinematics, contact anchoring</span></button>
+          <div class="arrowdown">↓</div>
+          <button class="node stack-v" data-k="refine"><span class="m">M2.5</span><span class="t">Refine in a twin</span><span class="s">Replay, then chunked sampling control</span></button>
+          <div class="arrowdown">↓</div>
+          <button class="node" data-k="rl"><span class="m">M10</span><span class="t">Residual policy</span><span class="s">Evolution strategies on binary success</span></button>
+        </div>
+      </div>
+
+      <div class="joinbar">
+        <div class="pipe-rail">
+          <button class="node" data-k="qc"><span class="m">M4</span><span class="t">Quality gate</span><span class="s">Six dimensions, verdict, repair feedback</span></button>
+          <button class="node" data-k="export"><span class="m">M5</span><span class="t">Export</span><span class="s">Frame-level entries with a quality token</span></button>
+          <button class="node" data-k="policy"><span class="m">M6</span><span class="t">Train and evaluate</span><span class="s">Flow-matching policy, closed-loop twin rollout</span></button>
+        </div>
+      </div>
+
+      <div class="pipe-detail" id="pipeDetail" aria-live="polite">
+        <div class="dt">Select a stage</div>
+        <div class="dd">Nine stages, one trace. The visual branch renders the robot at the forward kinematics of the trajectory the action branch produced, so the two outputs describe the same robot by construction.</div>
+      </div>
+
+      <div class="iron"><strong>Iron rule.</strong> The configuration rendered in the video is the forward kinematics of the final executed trajectory. Whenever the trajectory changes, the video is rendered again.</div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 6. TRACE ============ -->
+<section id="trace">
+  <div class="wrap">
+    <div class="eyebrow reveal">06 · The trace</div>
+    <h2 class="reveal">A gravity-aligned, metric, camera-explicit object where contact is a field.</h2>
+    <div class="two wide-r" style="margin-top:30px">
+      <div class="reveal">
+        <p>Every frame carries the camera pose, twenty-one hand keypoints with a wrist frame, the object point cloud and its pose, and a contact record: the contact points in world coordinates, their normals, and which hand parts produced them. Episode level contact events are rebuilt from the per-frame states. Because the camera trajectory is explicit and the frame is anchored to the workbench, the trace is independent of the capture device and the viewpoint.</p>
+        <p>Contact state comes from three pieces of evidence, combined with hysteresis so that a grasp holds once it starts.</p>
+        <div class="evid">
+          <div><b>Proximity</b>Minimum distance from eleven hand probes to the object surface</div>
+          <div><b>Closure</b>Aperture between the thumb and the other fingertips</div>
+          <div><b>Co-motion</b>Velocity agreement between the hand and the object</div>
+        </div>
+        <div class="phases">
+          <span>idle</span><span>reach</span><span>pre-grasp</span><span>grasp</span><span>transport</span><span>interact</span><span>release</span><span>retract</span>
+        </div>
+        <p class="cap">Eight phases are derived from the dominant contact state and the object displacement, and they give every downstream stage a shared timeline.</p>
+      </div>
+      <div class="reveal">
+        <div class="fsm" role="group" aria-label="Contact states">
+          <button data-s="free" class="on"><span class="n">Free</span><span class="i">01</span></button>
+          <button data-s="approach"><span class="n">Approach</span><span class="i">02</span></button>
+          <button data-s="touch"><span class="n">Touch</span><span class="i">03</span></button>
+          <button data-s="grasp"><span class="n">Grasp</span><span class="i">04</span></button>
+          <button data-s="release"><span class="n">Release</span><span class="i">05</span></button>
+        </div>
+        <div class="fsm-out" id="fsmOut" aria-live="polite"></div>
+        <p class="cap">Thresholds enter and exit at different distances, so a contact that has begun survives a frame of noisy depth. Confidence is a soft margin on each piece of evidence, and it propagates into the quality score.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 7. ACTION BRANCH ============ -->
+<section id="action">
+  <div class="wrap">
+    <div class="eyebrow reveal">07 · Action branch</div>
+    <h2 class="reveal">Anchor the grasp on the touch, then earn executability in three rungs.</h2>
+
+    <div class="two" style="margin-top:26px">
+      <div class="reveal">
+        <h3 style="margin-bottom:8px">The single experimental variable</h3>
+        <p>Both arms of the study share one solver, one robot, one scene. They differ in one flag. The kinematic arm sends the gripper to the wrist pose and closes it by the human aperture. The contact-anchored arm ramps the target toward the contact points eight frames before the grasp begins, aligns the jaw axis with the thumb-to-index direction, and locks the gripper closed for the duration of the grasp event.</p>
+        <p>On grasp frames the two arms request end effector targets that differ by <span class="hl">0.116 to 0.136 m</span>. Outside the grasp interval they agree to machine precision. That is a clean single-variable ablation, and the gap is bit-identical across two different robots, which proves the anchor is generated in the canonical frame and carried by the trace rather than by the embodiment.</p>
+        <div class="chips" style="margin-top:14px">
+          <span class="chip">MINK inverse kinematics</span><span class="chip">quadratic program, joint limits</span>
+          <span class="chip">reach-aware base placement</span><span class="chip c">contact anchoring</span><span class="chip c">pre-grasp ramp</span>
+        </div>
+      </div>
+      <div class="reveal">
+        <div class="ladder">
+          <div class="rung"><div class="num">1</div><div><h3>Replay</h3><p>Servo the reference joint positions in a MuJoCo twin rebuilt from the same scene. Cheap, and it exposes references that physics rejects.</p></div></div>
+          <div class="rung"><div class="num">2</div><div><h3>Chunked sampling control</h3><p>Twenty-frame receding horizon. If the replayed chunk already tracks the object, commit it for free. Otherwise sample in joint space with time-correlated noise and score tracking, contact, smoothness. The reference is always candidate zero, so a chunk is chosen only when it improves.</p></div></div>
+          <div class="rung hi"><div class="num">3</div><div><h3>Residual policy, whole horizon</h3><p>A small state-conditioned network adds a bounded residual to the reference action. It is trained by evolution strategies against a binary success reward, because contact switches and early termination make the twin reward non-differentiable. A tightness knob separates the reward boundary from the simulator boundary, and that knob is what lets the residual overtake the sampler.</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart reveal" style="margin-top:34px">
+      <div class="head">
+        <div class="t">Binary success rate, swept over the tracking boundary</div>
+        <label class="slider">Boundary C
+          <input type="range" id="cSlider" min="0" max="4" step="1" value="0">
+          <b id="cVal" style="color:var(--contact);font-family:var(--display)">0.50</b>
+        </label>
+      </div>
+      <div class="bars">
+        <div class="bar b1"><span class="nm">Replay</span><div class="tr"><div class="fl" id="barReplay"></div></div><span class="vl" id="valReplay">0.25</span></div>
+        <div class="bar b2"><span class="nm">Sampling control</span><div class="tr"><div class="fl" id="barMpc"></div></div><span class="vl" id="valMpc">0.50</span></div>
+        <div class="bar b3"><span class="nm">Residual policy</span><div class="tr"><div class="fl" id="barRl"></div></div><span class="vl" id="valRl">0.50</span></div>
+      </div>
+      <div class="note" id="cNote">Drag the boundary tighter. At a loose boundary the sampler is already enough. At 0.30 the residual policy doubles it, and at 0.25 it is the only rung that recovers an episode at all. Four contact-rich TACO episodes, binary success over the full horizon.</div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 8. VISUAL BRANCH ============ -->
+<section id="visual">
+  <div class="wrap">
+    <div class="eyebrow reveal">08 · Visual branch</div>
+    <h2 class="reveal">Fidelity that leaves the geometry alone.</h2>
+    <div class="two" style="margin-top:26px">
+      <div class="reveal">
+        <p class="lede">The robot is composited into the real scene by rendering the twin twice and taking the difference. Both passes share the camera, the lighting and the scene; the only change between them is whether the robot geometry is visible. Background pixels are therefore bit-identical, and the robot mask is exact, including self-occlusion behind real objects.</p>
+        <div class="stack" style="margin-top:18px">
+          <div class="card"><h3>Pass one</h3><p>Render the scene with the robot hidden. This is the background reference.</p></div>
+          <div class="card"><h3>Pass two</h3><p>Render again with the robot visible. Any pixel that changed belongs to the robot.</p></div>
+          <div class="card"><h3>Compose</h3><p>Feather the mask by one and a half pixels and alpha-blend onto the inpainted plate. Sub-pixel edges, zero hallucination.</p></div>
+        </div>
+        <p class="cap" style="margin-top:16px">Fidelity upgrades in the high-fidelity pass are all deterministic: two times supersampling, soft shadows, studio key lighting, a temporal median background plate recovered from unoccluded frames, and a color harmonization step that matches the robot to the ring of real pixels around it.</p>
+      </div>
+      <div class="reveal">
+        <figure style="margin:0">
+          <div class="ba" id="ba">
+            <img src="assets/blend_brush.jpg" alt="Baseline composite of the robot into the scene">
+            <div class="after"><img src="assets/hifi_brush.jpg" alt="High-fidelity composite of the robot into the scene"></div>
+            <div class="handle"></div>
+            <div class="tag l">Baseline composite</div>
+            <div class="tag r">High fidelity</div>
+          </div>
+          <figcaption class="cap">Drag to compare. Geometry is identical between the two, by construction: cycle consistency stays at 0.9994 in the smoke test and averages 0.97 across the full set.</figcaption>
+        </figure>
+        <table style="margin-top:20px">
+          <thead><tr><th>Fréchet distance to real ego frames</th><th class="num">Baseline</th><th class="num">High fidelity</th></tr></thead>
+          <tbody>
+            <tr class="win"><td>ResNet-18 features</td><td class="num">171.1</td><td class="num">143.9</td></tr>
+            <tr class="win"><td>VGG-16 features</td><td class="num">40.6</td><td class="num">28.9</td></tr>
+            <tr class="win"><td>DINOv2-large features</td><td class="num">344.3</td><td class="num">299.7</td></tr>
+          </tbody>
+        </table>
+        <p class="cap">Lower is closer to real footage. Three encoders agree, over 27 packages and 6 900 frames. This is a within-engine comparison against our own baseline composite, and it is reported as such.</p>
+      </div>
+    </div>
+
+    <figure class="reveal" style="margin:44px 0 0">
+      <div class="vidcard"><video src="assets/hero_stir.mp4" autoplay loop muted playsinline preload="metadata"></video>
+        <div class="vlab"><span>Input · human ego</span><span class="r">Output · robotized</span></div>
+      </div>
+      <figcaption class="cap">Stirring with a spoon: a contact-rich tool-use case, and the one that exposes the ceiling of a parallel jaw. Which is why the next embodiment is a dexterous hand.</figcaption>
+    </figure>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 9. QC ============ -->
+<section id="qc">
+  <div class="wrap">
+    <div class="eyebrow reveal">09 · Closed-loop quality</div>
+    <h2 class="reveal">Score by running it. Repair by rerunning the stage that broke.</h2>
+    <p class="lede reveal">Six dimensions, three of them measured by executing the trajectory in the twin. The verdict conditions the export rather than deleting the clip: a marginal clip ships with a quality token that the policy reads as an input.</p>
+
+    <div class="qcgrid reveal" style="margin-top:26px">
+      <div class="qcdim"><div class="n">Trace confidence</div><div class="d">Perception agreement inside the trace</div></div>
+      <div class="qcdim"><div class="n">Contact consistency</div><div class="d">Contact events survive the retarget</div></div>
+      <div class="qcdim req"><div class="n">Retarget feasibility</div><div class="d">Inverse kinematics reaches the targets within limits</div></div>
+      <div class="qcdim req"><div class="n">Rollout score</div><div class="d">Object tracking reward when the trajectory is executed</div></div>
+      <div class="qcdim req"><div class="n">Contact feasibility</div><div class="d">Fingers genuinely touch the object during grasp frames</div></div>
+      <div class="qcdim req"><div class="n">Cycle consistency</div><div class="d">Executed end effector lands on the rendered robot, per frame</div></div>
+    </div>
+    <div class="verdicts reveal"><span class="vd p">pass</span><span class="vd m">marginal</span><span class="vd f">fail</span>
+      <span class="cap" style="margin:0 0 0 8px">Weighted overall score, with a required set. A missing required dimension fails outright.</span></div>
+
+    <div class="repair reveal" style="margin-top:30px">
+      <h3 style="margin-bottom:14px">The repair feedback loop</h3>
+      <div class="rlane" id="rlane">
+        <div class="pkg" data-v="pass" data-id="157"><span class="id">brush 157</span><span class="st">pass</span></div>
+        <div class="pkg" data-v="marginal" data-id="163"><span class="id">brush 163</span><span class="st">marginal</span></div>
+        <div class="pkg" data-v="fail" data-id="019"><span class="id">stir 019</span><span class="st">fail</span></div>
+        <div class="pkg" data-v="marginal" data-id="202"><span class="id">stir 202</span><span class="st">marginal</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:26px;flex-wrap:wrap">
+        <button class="act" id="repairBtn">Run repair</button>
+        <div class="yield"><span class="big" id="yieldVal">25%</span><span class="lbl">strict pass yield</span></div>
+      </div>
+      <div class="cap" id="repairLog" style="min-height:74px;margin-top:14px">Four packages enter the gate. One passes. Press run repair to route each failure reason to its repair action.</div>
+    </div>
+    <p class="cap reveal" style="margin-top:16px">The loop caught four real failures in our own experiments before they could contaminate a conclusion, including a control divergence that the visual branch located for the action branch. A data engine that audits itself is part of the contribution.</p>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 10. POLICY ============ -->
+<section id="policy">
+  <div class="wrap">
+    <div class="eyebrow reveal">10 · From data to policy</div>
+    <h2 class="reveal">The dataset is judged by the policy it produces.</h2>
+    <div class="two wide-l" style="margin-top:26px">
+      <div class="reveal">
+        <p class="lede">Packages export as frame-level entries: robotized video reference, executed joint state, next-state action, language instruction, and the quality token. A 28 M parameter flow-matching visuomotor policy consumes them: a ResNet stem gives sixteen visual tokens, proprioception gives one, quality gives one, a two-layer transformer fuses them, and a rectified flow head emits a twenty-step action chunk in ten Euler steps.</p>
+        <p>Evaluation closes the loop. The policy drives the same twin from which the data came, observing composited frames in the pixel domain it was trained on, and success is scored on relative object displacement. The pre-registered primary metric is the interaction-gated success rate, and episodes are held out whole, so no frame of a training episode appears in validation.</p>
+      </div>
+      <div class="reveal">
+        <div class="kpis" style="grid-template-columns:1fr 1fr;margin-top:0">
+          <div class="kpi"><div class="v">28.2 M</div><div class="l">flow-matching policy, three seeds per arm</div></div>
+          <div class="kpi"><div class="v">episode-level</div><div class="l">held-out split, shared across all cells</div></div>
+          <div class="kpi c"><div class="v">1.25×</div><div class="l">interaction rate, contact-anchored over kinematic, 7 of 10 episodes</div></div>
+          <div class="kpi c"><div class="v">1.78×</div><div class="l">interaction-gated success, directional, underpowered at n = 4</div></div>
+        </div>
+        <p class="cap">Reported with the tension intact: contact-anchored data trains policies that engage the object more often, and engagement is distinct from endpoint success. Significance needs roughly twenty-five paired episodes, and data access is the reason we have four.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 11. PLAN ============ -->
+<section id="plan">
+  <div class="wrap">
+    <div class="eyebrow reveal">11 · Stages and checkpoints</div>
+    <h2 class="reveal">Each stage ships a gate. A gate is a number, decided before the run.</h2>
+    <p class="lede reveal">Open a milestone to see what it had to prove before the next one was allowed to start.</p>
+
+    <div class="tl reveal" style="margin-top:32px">
+      <details class="ms done"><summary><span class="mid">M0</span><span class="mt">Ingest and schema</span><span class="badge">cleared</span></summary>
+        <div class="body">Package layout, license screening, trace schema with a validator, and the export writer.
+          <div class="gate"><b>Gate</b>Schema round-trips and the full test suite is green.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M1</span><span class="mt">Perception stack</span><span class="badge">cleared</span></summary>
+        <div class="body">Hand pose, video segmentation, monocular depth with a metric scale fit, and camera motion. A real in-the-wild clip runs end to end.
+          <div class="gate"><b>Gate</b>Three hundred frames traverse every stage, with confidence reported honestly when a model is unavailable.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M1.5</span><span class="mt">First traces with contact</span><span class="badge">cleared</span></summary>
+        <div class="body">Ground-truth hand channel, contact state machine, phase segmentation.
+          <div class="gate"><b>Gate</b>Contact events appear on every episode, contact confidence above 0.75, zero schema violations.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M2</span><span class="mt">Retarget and the ablation axis</span><span class="badge">cleared</span></summary>
+        <div class="body">Inverse kinematics, base placement, gripper mapping, and the contact-anchored versus kinematic switch.
+          <div class="gate"><b>Gate</b>Median position error below two millimetres, and the two arms differ only on grasp frames.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M2.5</span><span class="mt">Refinement in the twin</span><span class="badge">cleared</span></summary>
+        <div class="body">Replay, then chunked sampling control with a free-commit shortcut for chunks that already track.
+          <div class="gate"><b>Gate</b>Sampling budget falls by a quarter through free commits, and contact feasibility rises over replay.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M3</span><span class="mt">Robotized video with a proof</span><span class="badge">cleared</span></summary>
+        <div class="body">Human removal, two-pass differential compositing, and the cycle-consistency metric.
+          <div class="gate"><b>Gate</b>Rendered configuration equals executed configuration exactly, and cycle consistency exceeds 0.99.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M4</span><span class="mt">Closed-loop quality gate</span><span class="badge">cleared</span></summary>
+        <div class="body">Six dimensions, weighted verdict, per-package report, and then the repair feedback loop.
+          <div class="gate"><b>Gate</b>Strict pass yield improves through repair alone, with every attempt restored to baseline when it fails to help.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M5</span><span class="mt">Export and policy utility</span><span class="badge">cleared</span></summary>
+        <div class="body">Frame-level export with a quality token, and a policy that trains on it.
+          <div class="gate"><b>Gate</b>Validation action error halves when the dataset grows, and the closed-loop harness runs without skips.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M6</span><span class="mt">Confirmatory experiment</span><span class="badge">cleared</span></summary>
+        <div class="body">Contact-anchored against kinematic, three seeds, balanced pairing, pre-registered primary metric.
+          <div class="gate"><b>Gate</b>Report the pre-registered metric whatever it says. It says directional support with insufficient power, and we published that.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M8</span><span class="mt">High-fidelity rendering</span><span class="badge">cleared</span></summary>
+        <div class="body">Deterministic fidelity upgrades, after a generative refinement attempt returned a negative result and was retired.
+          <div class="gate"><b>Gate</b>Three encoders agree that the render moved closer to real footage, while cycle consistency holds.</div></div></details>
+
+      <details class="ms done"><summary><span class="mid">M10</span><span class="mt">Residual policy layer</span><span class="badge">cleared</span></summary>
+        <div class="body">Whole-horizon residual trained by evolution strategies, with the tightness knob that decouples the reward boundary from the simulator boundary.
+          <div class="gate"><b>Gate</b>Ordering replay below sampler below residual, at a tight boundary.</div></div></details>
+
+      <details class="ms now" open><summary><span class="mid">M34</span><span class="mt">Dexterous hand, one trace many robots</span><span class="badge g">in progress</span></summary>
+        <div class="body">The parallel jaw touches a spoon handle on roughly a fifth of grasp frames, and that ceiling is a hardware ceiling. The same trace now drives a sixteen degree-of-freedom hand: the palm follows the wrist, and every fingertip is anchored to the contact point recorded for that finger. Contact consistency graduates from the jaw centre to each finger.
+          <div class="gate"><b>Gate a</b>The hand builds in the twin and reaches a closure.</div>
+          <div class="gate"><b>Gate b</b>Per-finger contact-anchored retarget runs on the stir episodes.</div>
+          <div class="gate"><b>Gate c</b>Contact feasibility on stir rises above 0.4, against 0.18 to 0.26 for the jaw, confirmed by eye on a close-up of the grasp.</div>
+          <div class="gate"><b>Gate d</b>One trace instantiated on three embodiments, with contact anchoring preserved on each.</div></div></details>
+
+      <details class="ms"><summary><span class="mid">M11</span><span class="mt">Scale and the third anchor</span><span class="badge">queued</span></summary>
+        <div class="body">Add the object-pose-anchored arm to complete the three-way scientific ablation, grow the paired pool to twenty-five valid episodes, and rerun the pre-registered test once, at the pre-declared re-analysis gate.
+          <div class="gate"><b>Gate</b>Twenty-five balanced pairs with a displacement above ten centimetres. Until the pool reaches the gate, the test stays sealed.</div></div></details>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 12. RISKS ============ -->
+<section id="risk">
+  <div class="wrap">
+    <div class="eyebrow reveal">12 · Anticipated difficulties and standing contingencies</div>
+    <h2 class="reveal">Every one of these was planned for. Several of them happened.</h2>
+    <div style="margin-top:28px" class="reveal">
+
+      <details class="risk"><summary><span class="rt">A licensed hand model gates the in-the-wild channel</span><span class="sev hi">happened</span></summary>
+        <div class="rbody">
+          <div><h4>Difficulty</h4><p>Recovering three-dimensional hands from arbitrary kitchen footage depends on a parametric hand model whose license requires registration. Without it, contact events collapse to zero on the wild channel and confidence falls to 0.10.</p></div>
+          <div class="plan"><h4>Contingency in force</h4><p>Two ground-truth channels bypass the block. One dataset publishes hand parameters whose wrist is exact by construction, with fingers reconstructed by an anatomical template that lands fingertips within eleven millimetres of the object surface. A second dataset ships twenty-one measured keypoints outright. Degradation is reported rather than concealed, and the wild channel waits.</p></div>
+        </div></details>
+
+      <details class="risk"><summary><span class="rt">Dataset acquisition throttled by the network</span><span class="sev hi">happened</span></summary>
+        <div class="rbody">
+          <div><h4>Difficulty</h4><p>Four separate attempts to grow the episode pool failed at the transport layer, and the proxy degraded for every external endpoint on the same day. The confirmatory experiment is underpowered because of bandwidth.</p></div>
+          <div class="plan"><h4>Contingency in force</h4><p>Fail fast rather than hammer, retry at off-peak with jitter, mirror episode by episode, and pivot to a second dataset that is reachable. A pilot run marked explicitly as non-confirmatory proceeds in parallel so that the harness is ready the moment data arrives.</p></div>
+        </div></details>
+
+      <details class="risk"><summary><span class="rt">A metric that rewards doing nothing</span><span class="sev hi">happened</span></summary>
+        <div class="rbody">
+          <div><h4>Difficulty</h4><p>Endpoint success with a five-centimetre threshold credits a frozen policy on episodes whose object barely moves. The weaker arm looked stronger, purely through stillness.</p></div>
+          <div class="plan"><h4>Contingency in force</h4><p>Detect the degeneracy by matching the modal displacement across cells against the ground-truth displacement. Then gate the metric on interaction, require selected episodes to move at least twice the threshold, and log per-rollout contact events. The primary metric was re-registered before the numbers were read.</p></div>
+        </div></details>
+
+      <details class="risk"><summary><span class="rt">Generative photorealism drifts the geometry</span><span class="sev md">happened, retired</span></summary>
+        <div class="rbody">
+          <div><h4>Difficulty</h4><p>Refining rendered frames with a video diffusion model trades photorealism against geometric drift, and the guard we built proved there is no sweet spot without a real-robot appearance prior. Fidelity moved backwards.</p></div>
+          <div class="plan"><h4>Contingency in force</h4><p>The geometric guard survives as a reusable gate for any future generator. The fidelity path switched to deterministic rendering upgrades, which moved the render measurably closer to real footage while leaving the geometry exact. The negative result is published.</p></div>
+        </div></details>
+
+      <details class="risk"><summary><span class="rt">A parallel jaw cannot hold a spoon</span><span class="sev hi">active</span></summary>
+        <div class="rbody">
+          <div><h4>Difficulty</h4><p>On stir episodes only eighteen to twenty-six percent of grasp frames show a true finger-object contact in the twin. Grip force is the wrong lever: tripling it lifted the brush set and left stir near zero, which points at the grasp pose and at the hardware.</p></div>
+          <div class="plan"><h4>Contingency in force</h4><p>Two paths run in order. First, contact-anchored grasp pose synthesis on the jaw. Second, a dexterous hand driven by the same trace, with every fingertip anchored to its own contact point. The second path also delivers the cross-embodiment breadth that the single contribution predicts.</p></div>
+        </div></details>
+
+      <details class="risk"><summary><span class="rt">Perception misses a contact event</span><span class="sev md">active</span></summary>
+        <div class="rbody">
+          <div><h4>Difficulty</h4><p>On the perceived-object channel, roughly a quarter of episodes produce identical contact-anchored and kinematic trajectories, which means the contact was missed. Those episodes carry zero signal for the ablation, and they are a mechanistic cause of the underpowered result.</p></div>
+          <div class="plan"><h4>Contingency in force</h4><p>Treat identical arms as a contamination gate and reject the episode from the study rather than count it. Improve object segmentation and depth back-projection, and prefer the ground-truth channel for the confirmatory test.</p></div>
+        </div></details>
+
+      <details class="risk"><summary><span class="rt">Concurrent offscreen rendering crashes the GPU context</span><span class="sev md">solved</span></summary>
+        <div class="rbody">
+          <div><h4>Difficulty</h4><p>Four simulator renderers on one device deadlock the graphics context, and a whole evaluation night is lost to a pathological grind.</p></div>
+          <div class="plan"><h4>Contingency in force</h4><p>One renderer per device, rollouts isolated in subprocesses, per-episode fail-fast, and a node blocklist. Forty rollouts out of forty now survive.</p></div>
+        </div></details>
+
+      <details class="risk"><summary><span class="rt">Repeated testing while the pool grows</span><span class="sev md">standing</span></summary>
+        <div class="rbody">
+          <div><h4>Difficulty</h4><p>Every new episode tempts a re-test, and re-testing until the number pleases you is how a project fools itself.</p></div>
+          <div class="plan"><h4>Contingency in force</h4><p>The re-analysis gate is declared in advance: the test stays sealed until the pool reaches twenty-five balanced pairs. The pool reached seven of the required eight valid episodes, and the test stayed sealed.</p></div>
+        </div></details>
+
+      <details class="risk"><summary><span class="rt">The twin is made of primitives</span><span class="sev md">standing</span></summary>
+        <div class="rbody">
+          <div><h4>Difficulty</h4><p>One episode resisted four escalating repair attempts and was marked unrepairable. The ceiling is the fidelity of the twin geometry rather than the control budget.</p></div>
+          <div class="plan"><h4>Contingency in force</h4><p>Mark it unrepairable, restore the baseline, and say so. The next lever is reconstructed object meshes in the twin, and the diagnosis is already recorded against that milestone.</p></div>
+        </div></details>
+
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 13. EVIDENCE ============ -->
+<section id="evidence">
+  <div class="wrap">
+    <div class="eyebrow reveal">13 · Evidence</div>
+    <h2 class="reveal">One claim, checked at four independent levels.</h2>
+    <p class="lede reveal">The claim: anchoring on contact rather than on kinematics propagates all the way to how a trained policy touches objects. Each level uses the same episodes and a different measurement.</p>
+
+    <table class="reveal" style="margin-top:26px">
+      <thead><tr><th>Level</th><th>Measurement</th><th class="num">Contact-anchored</th><th class="num">Kinematic</th></tr></thead>
+      <tbody>
+        <tr class="win"><td>Data, after replay</td><td>Contact feasibility in the twin</td><td class="num">3 of 4 episodes above zero</td><td class="num">4 of 4 at zero</td></tr>
+        <tr class="win"><td>Data, after refinement</td><td>Contact feasibility in the twin</td><td class="num">0.18 to 0.39</td><td class="num">0 to 0.09</td></tr>
+        <tr class="win"><td>Data, across embodiments</td><td>Sixteen cells, episode by robot</td><td class="num">wins 8 of 8</td><td class="num">contact vanishes in half</td></tr>
+        <tr class="win"><td>Policy</td><td>Interaction rate over rollouts</td><td class="num">0.532</td><td class="num">0.425</td></tr>
+      </tbody>
+    </table>
+    <p class="cap">The end effector target gap between the two arms is bit-identical across two different robots, which is mechanistic proof that the anchor is generated in the canonical frame and travels with the trace.</p>
+
+    <div class="kpis reveal" style="margin-top:34px">
+      <div class="kpi c"><div class="v">2×</div><div class="l">residual policy over sampling control at a tight tracking boundary</div></div>
+      <div class="kpi c"><div class="v">0.993</div><div class="l">inverse kinematics feasibility on the second embodiment, against 0.768 on the first</div></div>
+      <div class="kpi c"><div class="v">4</div><div class="l">real failures in our own experiments caught by the quality gate before they reached a conclusion</div></div>
+    </div>
+
+    <div class="two" style="margin-top:44px">
+      <figure class="reveal" style="margin:0">
+        <div class="vidcard"><video src="assets/compare_brush.mp4" autoplay loop muted playsinline preload="metadata"></video>
+          <div class="vlab"><span>Baseline composite</span><span class="r">High fidelity</span></div></div>
+        <figcaption class="cap">Fidelity comes from rendering rather than from generation, so the arm in every frame remains the arm the trajectory commands.</figcaption>
+      </figure>
+      <div class="reveal">
+        <h3 style="margin-bottom:10px">Reported with the tension intact</h3>
+        <p>Contact-anchored data trains policies that engage objects more often, and on raw endpoint success the kinematic arm currently scores higher on the wider pool. Engagement is distinct from task success: a policy that reaches the object can overshoot it. The primary metric remains the interaction-gated success rate, the result remains directional and underpowered, and an earlier stronger estimate that came from partial coverage was withdrawn.</p>
+        <p class="cap">Confidence in a data engine comes from the failures it publishes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ 14. ROADMAP ============ -->
+<section id="road">
+  <div class="wrap">
+    <div class="eyebrow reveal">14 · What is next</div>
+    <h2 class="reveal">Three open items, one shared root.</h2>
+    <div class="two wide-l" style="margin-top:26px">
+      <div class="stack reveal">
+        <div class="card"><h3>Statistical power</h3><p>The pre-registered primary metric needs roughly twenty-five paired episodes. We have four valid ones, and the pool grows as fast as the network allows.</p></div>
+        <div class="card"><h3>True photorealism</h3><p>A rasterizer has a ceiling. Passing it means learning a render-to-real mapping, which requires footage from a real robot camera.</p></div>
+        <div class="card"><h3>Comparable fidelity numbers</h3><p>The field reports distance to real robot observations. Public human-video datasets contain none, so that protocol stays out of reach until such observations are available.</p></div>
+      </div>
+      <div class="reveal">
+        <p class="q">All three unlock with the same key: observations recorded on a real robot.</p>
+        <p>Two levers are ours alone and move now. The dexterous hand removes the hardware ceiling on tool tasks and completes the cross-embodiment story: one trace, a parallel jaw, and a sixteen degree-of-freedom hand, with contact anchoring preserved on each. Contact-anchored grasp pose synthesis attacks the same ceiling from the algorithm side. The third anchoring arm, object pose, completes the scientific ablation the project set out to run.</p>
+        <div class="chips" style="margin-top:18px">
+          <span class="chip c">per-finger contact anchoring</span>
+          <span class="chip c">grasp pose synthesis</span>
+          <span class="chip">object-pose-anchored arm</span>
+          <span class="chip">reconstructed meshes in the twin</span>
+          <span class="chip">wild channel, once the hand model unlocks</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div style="display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap">
+      <div>
+        <strong style="font-family:var(--display);color:var(--ink)">Ego2Real / RoboEgoForge</strong><br>
+        A human-ego-to-robot data engine. One contact-consistent trace, two branches, execution-verified quality.
+      </div>
+      <div style="text-align:right">
+        Rendered results: TACO and EgoDex episodes.<br>
+        Digital twin: MuJoCo. Embodiments: Franka Panda, UR5e, dexterous hand.
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
