@@ -29,6 +29,7 @@
   <div class="wrap">
     <div class="brand">Ego2Real <span>/</span> RoboEgoForge</div>
     <div class="links">
+      <a href="#gallery">Demo</a>
       <a href="#task">Task</a>
       <a href="#challenge">Challenge</a>
       <a href="#insight">Insight</a>
@@ -68,6 +69,52 @@
       <div><b>25 → 50%</b><span>strict yield, after automatic repair</span></div>
       <div><b>3</b><span>embodiments from one trace</span></div>
     </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ============ DEMO GALLERY ============ -->
+<section id="gallery">
+  <div class="wrap">
+    <div class="eyebrow reveal">Demo · one engine, many tasks and scenes</div>
+    <h2 class="reveal">Human video goes in. This robot data comes out.</h2>
+    <p class="lede reveal">Every clip is a real output of the engine: the person is removed, a robot is composited into their scene, and the arm you see is rendered at the forward kinematics of the trajectory that was executed and verified in a twin. Tap any clip to enlarge.</p>
+
+    <div class="gallery reveal">
+      <button class="gclip big" data-src="assets/demo/cups.mp4" data-t="Stack and unstack cups" data-s="EgoDex · Franka Panda · contact-anchored">
+        <span class="pin b">robotized</span>
+        <video src="assets/demo/cups.mp4" autoplay loop muted playsinline preload="metadata"></video>
+        <span class="meta"><span class="tk">Stack and unstack cups</span><span class="sub">EgoDex · Franka Panda</span></span>
+      </button>
+      <button class="gclip sm" data-src="assets/demo/brush163.mp4" data-t="Brush the box" data-s="TACO · Franka Panda · contact-anchored">
+        <span class="pin">contact-rich</span>
+        <video src="assets/demo/brush163.mp4" autoplay loop muted playsinline preload="metadata"></video>
+        <span class="meta"><span class="tk">Brush the box</span><span class="sub">TACO · tool use</span></span>
+      </button>
+
+      <button class="gclip sm" data-src="assets/demo/stir202.mp4" data-t="Stir with a spoon" data-s="TACO · Franka Panda · contact-anchored">
+        <span class="pin">contact-rich</span>
+        <video src="assets/demo/stir202.mp4" autoplay loop muted playsinline preload="metadata"></video>
+        <span class="meta"><span class="tk">Stir with a spoon</span><span class="sub">TACO · tool use</span></span>
+      </button>
+      <button class="gclip sm" data-src="assets/demo/pickplace.mp4" data-t="Pick and place" data-s="EgoDex · Franka Panda · contact-anchored">
+        <span class="pin b">robotized</span>
+        <video src="assets/demo/pickplace.mp4" autoplay loop muted playsinline preload="metadata"></video>
+        <span class="meta"><span class="tk">Pick and place</span><span class="sub">EgoDex</span></span>
+      </button>
+      <button class="gclip sm" data-src="assets/demo/plates.mp4" data-t="Stack and unstack plates" data-s="EgoDex · Franka Panda · contact-anchored">
+        <span class="pin b">robotized</span>
+        <video src="assets/demo/plates.mp4" autoplay loop muted playsinline preload="metadata"></video>
+        <span class="meta"><span class="tk">Stack and unstack plates</span><span class="sub">EgoDex</span></span>
+      </button>
+    </div>
+    <div class="gnote reveal">
+      <span><b>2</b> source datasets, TACO and EgoDex</span>
+      <span><b>27</b> robotized packages, 6 900 frames</span>
+      <span><b>0.97</b> forward-kinematic cycle consistency</span>
+      <span><b>Franka, UR5e, dexterous hand</b> from one trace</span>
+    </div>
+    <p class="cap reveal">Every arm here is rendered rather than generated, so the robot in the video is exactly the robot the shipped trajectory commands. The next sections show how one trace produces both the picture and the actions.</p>
   </div>
 </section>
 <div class="divider"></div>
@@ -652,6 +699,15 @@
     </div>
   </div>
 </footer>
+
+<!-- lightbox -->
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Enlarged clip">
+  <button class="x" id="lbx" aria-label="Close">×</button>
+  <div class="box">
+    <video id="lbv" controls autoplay loop muted playsinline></video>
+    <div class="cap"><span class="t" id="lbt"></span><span id="lbs"></span></div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>

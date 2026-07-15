@@ -193,6 +193,23 @@ const FSM = {
   if (img.complete) size(); else img.addEventListener('load', size);
 })();
 
+/* ---------- gallery lightbox ---------- */
+(function () {
+  const lb = document.getElementById('lb'), v = document.getElementById('lbv'),
+    t = document.getElementById('lbt'), s = document.getElementById('lbs'), x = document.getElementById('lbx');
+  if (!lb) return;
+  function open(src, tt, ss) {
+    v.src = src; t.textContent = tt; s.textContent = ss;
+    lb.classList.add('on'); v.play().catch(() => {});
+  }
+  function close() { lb.classList.remove('on'); v.pause(); v.removeAttribute('src'); v.load(); }
+  document.querySelectorAll('.gclip').forEach(c =>
+    c.addEventListener('click', () => open(c.dataset.src, c.dataset.t, c.dataset.s)));
+  x.addEventListener('click', close);
+  lb.addEventListener('click', e => { if (e.target === lb) close(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && lb.classList.contains('on')) close(); });
+})();
+
 /* ---------- repair feedback loop ---------- */
 (function () {
   const btn = document.getElementById('repairBtn');
